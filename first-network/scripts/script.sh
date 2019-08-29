@@ -10,6 +10,7 @@ echo
 echo "Build your first network (BYFN) end-to-end test"
 echo
 CHANNEL_NAME="$1"
+CHANNEL_NAME2="$1"2
 DELAY="$2"
 LANGUAGE="$3"
 TIMEOUT="$4"
@@ -53,6 +54,27 @@ createChannel() {
 	echo
 }
 
+
+createChannel2() {
+	setGlobals 0 1
+
+	if [ -z "$CORE_PEER_TLS_ENABLED" -o "$CORE_PEER_TLS_ENABLED" = "false" ]; then
+                set -x
+		peer channel create -o orderer.example.com:7050 -c $CHANNEL_NAME2 -f ./channel-artifacts/channel2.tx >&log.txt
+		res=$?
+                set +x
+	else
+				set -x
+		peer channel create -o orderer.example.com:7050 -c $CHANNEL_NAME2 -f ./channel-artifacts/channel2.tx --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA >&log.txt
+		res=$?
+				set +x
+	fi
+	cat log.txt
+	verifyResult $res "Channel creation failed"
+	echo "===================== Channel '$CHANNEL_NAME2' created ===================== "
+	echo
+}
+
 joinChannel () {
 	for org in 1 2; do
 	    for peer in 0 1; do
@@ -64,45 +86,72 @@ joinChannel () {
 	done
 }
 
-## Create channel
-echo "Creating channel..."
-createChannel
+joinChannel2 () {
+	for org in 1 2; do
+	    for peer in 0 1; do
+		joinChannelWithRetry2 $peer $org
+		echo "===================== peer${peer}.org${org} joined channel '$CHANNEL_NAME2' ===================== "
+		sleep $DELAY
+		echo
+	    done
+	done
+}
 
-## Join all the peers to the channel
-echo "Having all peers join the channel..."
-joinChannel
+# ## Create channel
+# echo "Creating channel..."
+# createChannel
+# createChannel2
 
-## Set the anchor peers for each org in the channel
-echo "Updating anchor peers for org1..."
-updateAnchorPeers 0 1
-echo "Updating anchor peers for org2..."
-updateAnchorPeers 0 2
+# ## Join all the peers to the channel
+# echo "Having all peers join the channel..."
+# joinChannel
+# joinChannel2
 
-## Install chaincode on peer0.org1 and peer0.org2
-echo "Installing chaincode on peer0.org1..."
-installChaincode 0 1
-echo "Install chaincode on peer0.org2..."
-installChaincode 0 2
+# ## Set the anchor peers for each org in the channel
+# echo "Updating anchor peers for org1..."
+# updateAnchorPeers 0 1
+# echo "Updating anchor peers for org2..."
+# updateAnchorPeers 0 2
 
-# Instantiate chaincode on peer0.org2
-echo "Instantiating chaincode on peer0.org2..."
-instantiateChaincode 0 2
+# ## Install chaincode on peer0.org1 and peer0.org2
+# echo "Installing chaincode on peer0.org1..."
+# installChaincode 0 1
+# echo "Install chaincode on peer0.org2..."
+# installChaincode 0 2
 
-# Query chaincode on peer0.org1
-echo "Querying chaincode on peer0.org1..."
-chaincodeQuery 0 1 100
+# echo "Installing chaincode2 on peer0.org1..."
+# installChaincode2 0 1
+# echo "Install chaincode2 on peer0.org2..."
+# installChaincode2 0 2
 
-# Invoke chaincode on peer0.org1 and peer0.org2
-echo "Sending invoke transaction on peer0.org1 peer0.org2..."
-chaincodeInvoke 0 1 0 2
+# # Instantiate chaincode on peer0.org2
+# echo "Instantiating chaincode on peer0.org2..."
+# instantiateChaincode 0 1
 
-## Install chaincode on peer1.org2
-echo "Installing chaincode on peer1.org2..."
-installChaincode 1 2
+echo "Instantiating chaincode-c2 on peer0.org2..."
+instantiateChaincode_c2 0 1
 
-# Query on chaincode on peer1.org2, check if the result is 90
-echo "Querying chaincode on peer1.org2..."
-chaincodeQuery 1 2 90
+# echo "Instantiating chaincode2 on peer0.org2..."
+# instantiateChaincode2 0 1
+
+# # Query chaincode on peer0.org1
+# echo "Querying chaincode on peer0.org1..."
+# chaincodeQuery 0 1 101
+
+# echo "Querying chaincode2 on peer0.org1..."
+# chaincodeQuery2 0 1 101
+
+# # Invoke chaincode on peer0.org1 and peer0.org2
+# echo "Sending invoke transaction on peer0.org1 peer0.org2..."
+# chaincodeInvoke 0 1 0 2
+
+# ## Install chaincode on peer1.org2
+# echo "Installing chaincode on peer1.org2..."
+# installChaincode 1 2
+
+# # Query on chaincode on peer1.org2, check if the result is 90
+# echo "Querying chaincode on peer1.org2..."
+# chaincodeQuery 1 2 90
 
 echo
 echo "========= All GOOD, BYFN execution completed =========== "

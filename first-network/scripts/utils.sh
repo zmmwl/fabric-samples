@@ -104,6 +104,29 @@ joinChannelWithRetry() {
   cat log.txt
   if [ $res -ne 0 -a $COUNTER -lt $MAX_RETRY ]; then
     COUNTER=$(expr $COUNTER + 1)
+    echo "peer${PEER}.org${ORG} failed to join the channel2, Retry after $DELAY seconds"
+    sleep $DELAY
+    joinChannelWithRetry $PEER $ORG
+  else
+    COUNTER=1
+  fi
+  verifyResult $res "After $MAX_RETRY attempts, peer${PEER}.org${ORG} has failed to join channel2 '$CHANNEL_NAME2' "
+}
+
+joinChannelWithRetry2() {
+  PEER=$1
+  ORG=$2
+  setGlobals $PEER $ORG
+
+  set -x
+  echo "zmm: ${CHANNEL_NAME2}.block"
+  ls -al  ${CHANNEL_NAME2}.block
+  peer channel join -b ${CHANNEL_NAME2}.block >&log.txt
+  res=$?
+  set +x
+  cat log.txt
+  if [ $res -ne 0 -a $COUNTER -lt $MAX_RETRY ]; then
+    COUNTER=$(expr $COUNTER + 1)
     echo "peer${PEER}.org${ORG} failed to join the channel, Retry after $DELAY seconds"
     sleep $DELAY
     joinChannelWithRetry $PEER $ORG
@@ -124,6 +147,21 @@ installChaincode() {
   set +x
   cat log.txt
   verifyResult $res "Chaincode installation on peer${PEER}.org${ORG} has failed"
+  echo "===================== Chaincode is installed on peer${PEER}.org${ORG} ===================== "
+  echo
+}
+
+installChaincode2() {
+  PEER=$1
+  ORG=$2
+  setGlobals $PEER $ORG
+  VERSION=${3:-1.0}
+  set -x
+  peer chaincode install -n mycc2 -v ${VERSION} -l ${LANGUAGE} -p ${CC_SRC_PATH} >&log.txt
+  res=$?
+  set +x
+  cat log.txt
+  verifyResult $res "Chaincode2 installation on peer${PEER}.org${ORG} has failed"
   echo "===================== Chaincode is installed on peer${PEER}.org${ORG} ===================== "
   echo
 }
@@ -150,6 +188,58 @@ instantiateChaincode() {
   fi
   cat log.txt
   verifyResult $res "Chaincode instantiation on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' failed"
+  echo "===================== Chaincode is instantiated on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' ===================== "
+  echo
+}
+
+instantiateChaincode_c2() {
+  PEER=$1
+  ORG=$2
+  setGlobals $PEER $ORG
+  VERSION=${3:-1.0}
+
+  # while 'peer chaincode' command can get the orderer endpoint from the peer
+  # (if join was successful), let's supply it directly as we know it using
+  # the "-o" option
+  if [ -z "$CORE_PEER_TLS_ENABLED" -o "$CORE_PEER_TLS_ENABLED" = "false" ]; then
+    set -x
+    peer chaincode instantiate -o orderer.example.com:7050 -C $CHANNEL_NAME2 -n mycc -l ${LANGUAGE} -v ${VERSION} -c '{"Args":["init","a","100","b","200"]}' -P "AND ('Org1MSP.peer','Org2MSP.peer')" >&log.txt
+    res=$?
+    set +x
+  else
+    set -x
+    peer chaincode instantiate -o orderer.example.com:7050 --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA -C $CHANNEL_NAME2 -n mycc -l ${LANGUAGE} -v 1.0 -c '{"Args":["init","a","100","b","200"]}' -P "AND ('Org1MSP.peer','Org2MSP.peer')" >&log.txt
+    res=$?
+    set +x
+  fi
+  cat log.txt
+  verifyResult $res "Chaincode instantiation on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' failed"
+  echo "===================== Chaincode is instantiated on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' ===================== "
+  echo
+}
+
+instantiateChaincode2() {
+  PEER=$1
+  ORG=$2
+  setGlobals $PEER $ORG
+  VERSION=${3:-1.0}
+
+  # while 'peer chaincode' command can get the orderer endpoint from the peer
+  # (if join was successful), let's supply it directly as we know it using
+  # the "-o" option
+  if [ -z "$CORE_PEER_TLS_ENABLED" -o "$CORE_PEER_TLS_ENABLED" = "false" ]; then
+    set -x
+    peer chaincode instantiate -o orderer.example.com:7050 -C $CHANNEL_NAME -n mycc2 -l ${LANGUAGE} -v ${VERSION} -c '{"Args":["init","a","101","b","201"]}' -P "AND ('Org1MSP.peer','Org2MSP.peer')" >&log.txt
+    res=$?
+    set +x
+  else
+    set -x
+    peer chaincode instantiate -o orderer.example.com:7050 --tls $CORE_PEER_TLS_ENABLED --cafile $ORDERER_CA -C $CHANNEL_NAME -n mycc2 -l ${LANGUAGE} -v 1.0 -c '{"Args":["init","a","101","b","201"]}' -P "AND ('Org1MSP.peer','Org2MSP.peer')" >&log.txt
+    res=$?
+    set +x
+  fi
+  cat log.txt
+  verifyResult $res "Chaincode2 instantiation on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' failed"
   echo "===================== Chaincode is instantiated on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' ===================== "
   echo
 }
@@ -187,6 +277,46 @@ chaincodeQuery() {
     echo "Attempting to Query peer${PEER}.org${ORG} ...$(($(date +%s) - starttime)) secs"
     set -x
     peer chaincode query -C $CHANNEL_NAME -n mycc -c '{"Args":["query","a"]}' >&log.txt
+    res=$?
+    set +x
+    test $res -eq 0 && VALUE=$(cat log.txt | awk '/Query Result/ {print $NF}')
+    test "$VALUE" = "$EXPECTED_RESULT" && let rc=0
+    # removed the string "Query Result" from peer chaincode query command
+    # result. as a result, have to support both options until the change
+    # is merged.
+    test $rc -ne 0 && VALUE=$(cat log.txt | egrep '^[0-9]+$')
+    test "$VALUE" = "$EXPECTED_RESULT" && let rc=0
+  done
+  echo
+  cat log.txt
+  if test $rc -eq 0; then
+    echo "===================== Query successful on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME' ===================== "
+  else
+    echo "!!!!!!!!!!!!!!! Query result on peer${PEER}.org${ORG} is INVALID !!!!!!!!!!!!!!!!"
+    echo "================== ERROR !!! FAILED to execute End-2-End Scenario =================="
+    echo
+    exit 1
+  fi
+}
+
+chaincodeQuery2() {
+  PEER=$1
+  ORG=$2
+  setGlobals $PEER $ORG
+  EXPECTED_RESULT=$3
+  echo "===================== Querying on peer${PEER}.org${ORG} on channel '$CHANNEL_NAME'... ===================== "
+  local rc=1
+  local starttime=$(date +%s)
+
+  # continue to poll
+  # we either get a successful response, or reach TIMEOUT
+  while
+    test "$(($(date +%s) - starttime))" -lt "$TIMEOUT" -a $rc -ne 0
+  do
+    sleep $DELAY
+    echo "Attempting to Query peer${PEER}.org${ORG} ...$(($(date +%s) - starttime)) secs"
+    set -x
+    peer chaincode query -C $CHANNEL_NAME -n mycc2 -c '{"Args":["query","a"]}' >&log.txt
     res=$?
     set +x
     test $res -eq 0 && VALUE=$(cat log.txt | awk '/Query Result/ {print $NF}')

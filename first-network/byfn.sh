@@ -400,12 +400,30 @@ function generateChannelArtifacts() {
     exit 1
   fi
 
+  echo "zmm: create channel2.tx for $CHANNEL_NAME2"
+  configtxgen -profile TwoOrgsChannel -outputCreateChannelTx ./channel-artifacts/channel2.tx -channelID $CHANNEL_NAME2
+  res=$?
+  set +x
+  if [ $res -ne 0 ]; then
+    echo "Failed to generate channel configuration transaction..."
+    exit 1
+  fi
+
   echo
   echo "#################################################################"
   echo "#######    Generating anchor peer update for Org1MSP   ##########"
   echo "#################################################################"
   set -x
   configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org1MSPanchors.tx -channelID $CHANNEL_NAME -asOrg Org1MSP
+  res=$?
+  set +x
+  if [ $res -ne 0 ]; then
+    echo "Failed to generate anchor peer update for Org1MSP..."
+    exit 1
+  fi
+
+  echo "zmm: create Org1MSPanchors2.tx for channel $CHANNEL_NAME2"
+  configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate ./channel-artifacts/Org1MSPanchors2.tx -channelID $CHANNEL_NAME2 -asOrg Org1MSP
   res=$?
   set +x
   if [ $res -ne 0 ]; then
@@ -426,6 +444,18 @@ function generateChannelArtifacts() {
     echo "Failed to generate anchor peer update for Org2MSP..."
     exit 1
   fi
+
+
+  echo "zmm: create Org2MSPanchors2.tx for channel $CHANNEL_NAME2"
+  configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate \
+    ./channel-artifacts/Org2MSPanchors2.tx -channelID $CHANNEL_NAME2 -asOrg Org2MSP
+  res=$?
+  set +x
+  if [ $res -ne 0 ]; then
+    echo "Failed to generate anchor peer update for Org2MSP..."
+    exit 1
+  fi
+
   echo
 }
 
@@ -439,6 +469,7 @@ CLI_TIMEOUT=10
 CLI_DELAY=3
 # channel name defaults to "mychannel"
 CHANNEL_NAME="mychannel"
+CHANNEL_NAME2="mychannel2"
 # use this as the default docker-compose yaml definition
 COMPOSE_FILE=docker-compose-cli.yaml
 #
